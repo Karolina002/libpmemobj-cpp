@@ -19,6 +19,7 @@ env:
 
 jobs:
   linux:
+    if: false
     name: Linux
     runs-on: ubuntu-latest
     env:
@@ -102,7 +103,7 @@ jobs:
       VCPKG_DEFAULT_TRIPLET: x64-windows
       GENERATOR: "Visual Studio 16 2019"
       ARCH:      "x64"
-      PMDK_VERSION: "1.9"
+      PMDK_VERSION: "1.11"
       CMAKE_TOOLCHAIN_FILE: "C:\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake"
       CMAKE_INSTALL_PREFIX: "C:\\install\\libpmemobj-cpp"
       MSBUILD:  "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Enterprise\\MSBuild\\Current\\Bin"
