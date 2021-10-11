@@ -314,6 +314,7 @@ function(pmreorder_execute expect_success engine conf_file name)
     set(cmd pmreorder -l ${BIN_DIR}/${TEST_NAME}.storelog
                     -o ${BIN_DIR}/${TEST_NAME}.pmreorder
                     -r ${engine}
+                    -e "debug"
                     -p "${name} ${ARGN}"
                     -x ${conf_file})
 

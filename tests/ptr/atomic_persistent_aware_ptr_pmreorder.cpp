@@ -6,6 +6,9 @@
  * pmreorder
  */
 
+#define private public
+#define protected public
+
 #include "thread_helpers.hpp"
 #include "unittest.hpp"
 
@@ -16,8 +19,42 @@
 #define LAYOUT "pmreorder"
 
 /* data (for self_relative_ptr) has to set the least significant byte to 0 */
-int TEST_DATA_R = 0xABBA;
-int TEST_DATA_W = 0xACDC;
+static int TEST_DATA_R = 0xABBA;
+static int TEST_DATA_W = 0xACDC;
+
+/* mock prepared to check negative case (simulate wrong implementation) */
+template <typename T>
+class mock_atomic_self_relative_ptr {
+public:
+	using value_type = pmem::obj::experimental::self_relative_ptr<T>;
+
+	void
+	store(value_type val, std::function<void(void)> syncthreads)
+	{
+		ptr.store(val);
+		syncthreads();
+		/* we want to simulate a pause for other thread to load the
+		 * wrong data!!! */
+		syncthreads();
+		pmem::obj::pool_by_vptr(this).persist(&ptr, sizeof(ptr));
+	}
+
+	value_type
+	load()
+	{
+		return ptr.load();
+	}
+
+	mock_atomic_self_relative_ptr &
+	operator=(value_type const &r)
+	{
+		ptr = r;
+		return *this;
+	}
+
+private:
+	std::atomic<pmem::obj::experimental::self_relative_ptr<T>> ptr;
+};
 
 namespace nvobj = pmem::obj;
 template <typename T>
@@ -31,9 +68,12 @@ struct root {
 	atomic_ptr<int, std::true_type> ptr_r;
 	/* write-optimized */
 	atomic_ptr<int, std::false_type> ptr_w;
+	/* mock for negative case */
+	mock_atomic_self_relative_ptr<int> ptr_neg;
 
 	self_relative_ptr<int> read_r;
 	self_relative_ptr<int> read_w;
+	self_relative_ptr<int> read_neg;
 };
 
 void
@@ -64,6 +104,39 @@ insert_and_read(nvobj::pool<root> &pop)
 }
 
 void
+insert_and_read_mock(nvobj::pool<root> &pop)
+{
+	auto r = pop.root();
+	parallel_xexec(
+		2,
+		[&](size_t thread_id, std::function<void(void)> syncthreads) {
+			syncthreads();
+
+			if (thread_id == 0) {
+				VALGRIND_PMC_EMIT_LOG("PMREORDER_MARKER.BEGIN");
+			}
+			syncthreads();
+
+			if (thread_id == 0) {
+				/* insert test data into mock atomic ptr */
+				r->ptr_neg.store(
+					reinterpret_cast<int *>(TEST_DATA_R), syncthreads);
+			} else {
+				/* read test data into self relative ptr */
+				syncthreads();
+				r->read_neg = r->ptr_neg.load();
+				syncthreads();
+				pop.persist(&r->read_neg, sizeof(r->read_neg));
+			}
+
+			syncthreads();
+			if (thread_id == 0) {
+				VALGRIND_PMC_EMIT_LOG("PMREORDER_MARKER.END");
+			}
+		});
+}
+
+void
 check_consistency(nvobj::pool<root> &pop)
 {
 	auto r = pop.root();
@@ -77,11 +150,27 @@ check_consistency(nvobj::pool<root> &pop)
 		  r->ptr_r.load().get() == r->read_r.get());
 }
 
+void
+check_consistency_mock(nvobj::pool<root> &pop)
+{
+	auto r = pop.root();
+
+	bool check1 = r->read_neg == nullptr;
+	auto ptr1 = r->ptr_neg.load().get();
+	auto ptr2 = r->read_neg.get();
+	bool check2 = ptr1 == ptr2;
+	std::cout << "CONSISTENCY CHECK" << std::endl;
+	std::cout << "CH1: " << check1 << ", loaded: " << ptr1 << " off: " << std::hex
+		<< r->ptr_neg.ptr.ptr.offset << std::dec << ", read_prev: " << ptr2
+		<< " off2: " << std::hex << r->read_neg.offset << std::dec << ", CH2: " << check2 << std::endl;
+	UT_ASSERT(check1 || check2);
+}
+
 static void
 test(int argc, char *argv[])
 {
-	if (argc != 3 || strchr("cio", argv[1][0]) == nullptr)
-		UT_FATAL("usage: %s <c|i|o> file-name", argv[0]);
+	if (argc != 3 || strchr("ciomn", argv[1][0]) == nullptr)
+		UT_FATAL("usage: %s <c|i|o|m|n> file-name", argv[0]);
 
 	const char *path = argv[2];
 
@@ -97,8 +186,10 @@ test(int argc, char *argv[])
 			pmem::obj::transaction::run(pop, [&] {
 				pop.root()->ptr_r = nullptr;
 				pop.root()->ptr_w = nullptr;
+				pop.root()->ptr_neg = nullptr;
 				pop.root()->read_r = nullptr;
 				pop.root()->read_w = nullptr;
+				pop.root()->read_neg = nullptr;
 			});
 
 		} else if (argv[1][0] == 'i') {
@@ -110,6 +201,16 @@ test(int argc, char *argv[])
 			/* re-open at the end, for consistency check */
 			pop = nvobj::pool<root>::open(path, LAYOUT);
 			check_consistency(pop);
+
+		} else if (argv[1][0] == 'm') {
+			/* mock store and load in parallel */
+			pop = nvobj::pool<root>::open(path, LAYOUT);
+			insert_and_read_mock(pop);
+
+		} else if (argv[1][0] == 'n') {
+			/* re-open at the end, for negative consistency check */
+			pop = nvobj::pool<root>::open(path, LAYOUT);
+			check_consistency_mock(pop);
 		}
 	} catch (pmem::pool_error &pe) {
 		UT_FATAL("!pool::create: %s %s", pe.what(), path);
