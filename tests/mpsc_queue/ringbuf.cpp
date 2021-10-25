@@ -333,15 +333,19 @@ test_size()
 int
 main(void)
 {
-	std::random_device rd;
-	auto seed = rd();
-	std::cout << "rand seed: " << seed << std::endl;
-	generator = std::mt19937_64(seed);
+	try {
+		std::random_device rd;
+		auto seed = rd();
+		std::cout << "rand seed: " << seed << std::endl;
+		generator = std::mt19937_64(seed);
 
-	test_wraparound();
-	test_multi();
-	test_overlap();
-	test_random();
-	test_size();
+		test_wraparound();
+		test_multi();
+		test_overlap();
+		test_random();
+		test_size();
+	} catch (...) {
+		ASSERT_UNREACHABLE;
+	}
 	return 0;
 }

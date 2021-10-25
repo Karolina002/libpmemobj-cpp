@@ -169,6 +169,7 @@ function tests_gcc_debug_cpp14_valgrind_other() {
 	build_gcc_debug_cpp14 ${TESTS_VALGRIND_UNWIND}
 	ctest -E "_none|_memcheck|_drd" --timeout ${TEST_TIMEOUT} --output-on-failure
 	ctest -R "_pmreorder" --timeout ${TEST_TIMEOUT} --output-on-failure
+	ctest -R "ringbuf_0_helgrind" --timeout ${TEST_TIMEOUT} --output-on-failure --repeat until-fail:150
 	workspace_cleanup
 	printf "$(tput setaf 1)$(tput setab 7)BUILD ${FUNCNAME[0]} END$(tput sgr 0)\n\n"
 }
