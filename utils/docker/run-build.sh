@@ -130,7 +130,7 @@ function build_gcc_debug_cpp14() {
 		-DUSE_ASAN=${TESTS_ASAN} \
 		-DUSE_UBSAN=${TESTS_UBSAN}
 
-	make -j$(nproc)
+	make -j$(nproc) ringbuf
 }
 
 ###############################################################################
@@ -164,8 +164,8 @@ function tests_gcc_debug_cpp14_valgrind_memcheck_drd() {
 function tests_gcc_debug_cpp14_valgrind_other() {
 	printf "\n$(tput setaf 1)$(tput setab 7)BUILD ${FUNCNAME[0]} START$(tput sgr 0)\n"
 	build_gcc_debug_cpp14
-	ctest -E "_none|_memcheck|_drd" --timeout ${TEST_TIMEOUT} --output-on-failure
-	ctest -R "_pmreorder" --timeout ${TEST_TIMEOUT} --output-on-failure
+	# ctest -E "_none|_memcheck|_drd" --timeout ${TEST_TIMEOUT} --output-on-failure
+	ctest -R "ringbuf_0_none|ringbuf_0_helgrind" --timeout ${TEST_TIMEOUT} --output-on-failure
 	workspace_cleanup
 	printf "$(tput setaf 1)$(tput setab 7)BUILD ${FUNCNAME[0]} END$(tput sgr 0)\n\n"
 }

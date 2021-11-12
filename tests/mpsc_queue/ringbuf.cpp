@@ -34,6 +34,7 @@
 #include "unittest.hpp"
 
 #include <random>
+#include <valgrind.h>
 
 #include <libpmemobj++/detail/ringbuf.hpp>
 
@@ -337,6 +338,12 @@ main(void)
 	auto seed = rd();
 	std::cout << "rand seed: " << seed << std::endl;
 	generator = std::mt19937_64(seed);
+
+	if (RUNNING_ON_VALGRIND) {
+		std::cout << "ON VALGRINDDDD :-)" << std::endl;
+	} else {
+		std::cout << "OFF valgrind" << std::endl;
+	}
 
 	test_wraparound();
 	test_multi();
