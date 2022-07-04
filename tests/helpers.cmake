@@ -133,12 +133,7 @@ function(execute_common expect_success output_file name)
 
     set(cmd ${TRACE} ${name} ${ARGN})
 
-    if(DEFINED ENV{CGDB} AND DEFINED ENV{GDBSERVER})
-        message(FATAL_ERROR "CGDB and GDBSERVER shouldn't be used at the same time."
-                "You should choose one way of debugging and probably refill your coffee.")
-    endif()
-
-    if(DEFINED ENV{CGDB})
+    if($ENV{CGDB})
         find_program(KONSOLE NAMES konsole)
         find_program(GNOME_TERMINAL NAMES gnome-terminal)
         find_program(CGDB NAMES cgdb)
@@ -156,18 +151,6 @@ function(execute_common expect_success output_file name)
                 set(cmd gnome-terminal --tab --active --wait -- cgdb --args ${cmd})
             endif()
         endif()
-    endif()
-
-    if(DEFINED ENV{GDBSERVER})
-        find_program(GDBSERVER NAMES gdbserver)
-        set(GDBSERVER_SETTINGS $ENV{GDBSERVER})
-        if (NOT GDBSERVER)
-            message(FATAL_ERROR "gdbserver not found.")
-        endif()
-        if(NOT (${TRACER} STREQUAL none))
-            message(FATAL_ERROR "Cannot use gdbserver with ${TRACER}")
-        endif()
-        set(cmd ${GDBSERVER} ${GDBSERVER_SETTINGS} ${cmd})
     endif()
 
     if(${output_file} STREQUAL none)
@@ -298,13 +281,13 @@ function(pmreorder_create_store_log pool name)
     set(cmd valgrind --tool=pmemcheck -q
         --log-stores=yes
         --print-summary=no
-        --log-file=${BIN_DIR}/${TEST_NAME}.storelog
         --log-stores-stacktraces=${PMREORDER_STACKTRACE}
         --log-stores-stacktraces-depth=${PMREORDER_STACKTRACE_DEPTH}
         --expect-fence-after-clflush=yes
         ${name} ${ARGN})
 
     execute_common(true ${TRACER}_${TESTCASE} ${cmd})
+    file(COPY ../../storelog/${TEST_NAME}.storelog DESTINATION ${BIN_DIR})
 
     unset(ENV{PMREORDER_EMIT_LOG})
 
@@ -331,6 +314,7 @@ function(pmreorder_execute expect_success engine conf_file name)
     set(cmd pmreorder -l ${BIN_DIR}/${TEST_NAME}.storelog
                     -o ${BIN_DIR}/${TEST_NAME}.pmreorder
                     -r ${engine}
+                    -e "debug"
                     -p "${name} ${ARGN}"
                     -x ${conf_file})
 
